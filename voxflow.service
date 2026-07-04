@@ -1,0 +1,14 @@
+[Unit]
+Description=VoxFlow local voice dictation daemon
+After=graphical-session.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/voxflow daemon
+Restart=on-failure
+RestartSec=3
+Environment=QT_QPA_PLATFORM=wayland
+
+[Install]
+WantedBy=graphical-session.target
