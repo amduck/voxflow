@@ -14,8 +14,13 @@ DEFAULT_CONFIG = """\
 # VoxFlow configuration
 
 [model]
+# Backend: "faster-whisper" (CPU, best accuracy per core) or
+# "whisper.cpp" (pywhispercpp — GPU via Vulkan on AMD/Intel when
+# installed with GGML_VULKAN=1; see README "GPU acceleration").
+backend = "faster-whisper"
 # tiny, base, small, medium, large-v3, or distil-* variants.
 # 'small' is a good CPU sweet spot; 'base' if your CPU is older.
+# With a GPU (whisper.cpp backend) you can afford 'medium' or 'large-v3'.
 size = "small"
 # "auto" detects language; or force e.g. "en" for better speed/accuracy.
 language = "en"
@@ -48,6 +53,7 @@ accent = "#7c6cf2"
 
 @dataclass
 class Config:
+    backend: str = "faster-whisper"
     model_size: str = "small"
     language: str = "en"
     device: str = "cpu"
@@ -75,6 +81,7 @@ def load_config() -> Config:
 
     lang = model.get("language", "en")
     return Config(
+        backend=model.get("backend", "faster-whisper"),
         model_size=model.get("size", "small"),
         language=None if lang in ("auto", "") else lang,
         device=model.get("device", "cpu"),

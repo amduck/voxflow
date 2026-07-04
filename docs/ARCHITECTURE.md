@@ -28,7 +28,7 @@ and that command just pokes the daemon.
 | `ipc.py` | `QLocalServer`/`QLocalSocket` on socket `voxflow-ipc`; verbs: toggle, start, stop, cancel, quit |
 | `config.py` | TOML config at `~/.config/voxflow/config.toml`, written with commented defaults on first run |
 | `recorder.py` | PortAudio input stream (16 kHz mono float32); accumulates chunks; publishes live RMS level for the waveform |
-| `transcriber.py` | faster-whisper wrapper: lazy model load, VAD filter, beam 5; single method `transcribe(np.ndarray) -> str` |
+| `transcriber.py` | STT backends behind `make_transcriber(cfg)`: `FasterWhisperTranscriber` (CTranslate2, CPU) and `WhisperCppTranscriber` (pywhispercpp, Vulkan GPU); both expose `transcribe(np.ndarray) -> str` |
 | `injector.py` | `type` via `ydotool type`, or `paste` via `wl-copy` + Ctrl+V with clipboard restore; `check_ydotool()` health probe |
 | `overlay.py` | Frameless translucent always-on-top pill, QPainter-drawn: live waveform (listening), pulsing dots (transcribing), error flash |
 | `app.py` | Wires everything: tray states, state machine (idle → listening → transcribing → inject), background model warm-up |
@@ -47,10 +47,12 @@ the main thread via Qt signals (`transcription_done` /
   protocol, which KWin does not expose to arbitrary clients; ydotool
   synthesizes events at the kernel uinput level and works on every
   compositor. Cost: the `ydotoold` daemon and `input` group membership.
-- **CPU int8 inference**: CTranslate2 has no ROCm backend. `small` +
-  int8 + VAD is near-realtime on modern CPUs. The transcriber interface
-  is one method precisely so a whisper.cpp/Vulkan backend can be swapped
-  in for AMD GPUs.
+- **Two STT backends**: CTranslate2 has no ROCm backend, so
+  faster-whisper is CPU int8 (near-realtime for `small` + VAD on modern
+  CPUs). The `whisper.cpp` backend (pywhispercpp built with
+  `GGML_VULKAN=1`) gives AMD/Intel GPU acceleration through Vulkan
+  without ROCm. Both implement one method, selected by
+  `make_transcriber(cfg)` from `[model] backend`.
 - **Daemon + IPC rather than in-app hotkey**: there is no portable way
   for a Wayland client to grab a global hotkey; delegating to the
   compositor's shortcut system is the reliable path and lets users pick
@@ -61,7 +63,8 @@ the main thread via Qt signals (`transcription_done` /
 
 ## Extension points
 
-- Alternative STT backend: reimplement `Transcriber.transcribe`.
+- Alternative STT backend: add a class with `transcribe(np.ndarray) -> str`
+  and a branch in `make_transcriber`.
 - Streaming/partial results: swap the stop-then-transcribe pipeline for
   chunked transcription fed from the recorder queue.
 - Post-processing (punctuation fixes, custom vocabulary, snippets):

@@ -14,7 +14,7 @@ from .injector import InjectionError, check_ydotool, inject
 from .ipc import IpcServer
 from .overlay import Overlay
 from .recorder import Recorder
-from .transcriber import Transcriber
+from .transcriber import make_transcriber
 
 
 def _mic_icon(color: str) -> QIcon:
@@ -45,10 +45,7 @@ class VoxFlowApp(QObject):
         self.busy = False  # transcription in flight
 
         self.recorder = Recorder(self.cfg.sample_rate, self.cfg.audio_device)
-        self.transcriber = Transcriber(
-            self.cfg.model_size, self.cfg.device,
-            self.cfg.compute_type, self.cfg.language,
-        )
+        self.transcriber = make_transcriber(self.cfg)
 
         self.overlay = Overlay(self.cfg.accent)
         self.overlay.set_level_source(lambda: self.recorder.level)

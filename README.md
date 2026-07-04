@@ -34,6 +34,8 @@ CLI verbs: `voxflow toggle | start | stop | cancel | quit`.
 
 `~/.config/voxflow/config.toml` (created on first run, commented):
 
+- `model.backend` — `faster-whisper` (CPU) or `whisper.cpp` (GPU via
+  Vulkan, see below).
 - `model.size` — `tiny`/`base`/`small`/`medium`/`large-v3`. `small` is the
   CPU sweet spot; drop to `base` on older hardware.
 - `model.language` — `"en"` (default), or `"auto"` to detect.
@@ -43,12 +45,42 @@ CLI verbs: `voxflow toggle | start | stop | cancel | quit`.
 
 Restart after editing: `systemctl --user restart voxflow`.
 
-## Notes & troubleshooting
+## GPU acceleration (AMD / Intel via Vulkan)
 
-- **AMD GPU**: CTranslate2 has no ROCm backend, so inference is CPU int8 —
-  near-realtime for `small` on a modern Ryzen. If you want GPU speed
-  later, swap `voxflow/transcriber.py` for whisper.cpp with its Vulkan
-  backend (`pywhispercpp`); the interface is one method.
+The default `faster-whisper` backend is CPU-only on AMD (CTranslate2 has
+no ROCm support). For GPU inference, switch to the `whisper.cpp` backend
+built with Vulkan — works on the stock Mesa/RADV driver, no ROCm needed:
+
+```bash
+# 1. Build deps + Vulkan toolchain
+sudo pacman -S --needed cmake gcc vulkan-headers vulkan-icd-loader \
+                        vulkan-tools shaderc glslang
+
+# 2. Confirm the GPU is visible to Vulkan
+vulkaninfo --summary | grep -i deviceName
+
+# 3. Build pywhispercpp with the Vulkan backend into VoxFlow's venv
+GGML_VULKAN=1 ~/.local/share/voxflow/venv/bin/pip install \
+    --no-binary :all: --no-cache-dir pywhispercpp
+```
+
+Then in `~/.config/voxflow/config.toml`:
+
+```toml
+[model]
+backend = "whisper.cpp"
+size = "medium"        # GPU headroom — or keep "small" for speed
+```
+
+and `systemctl --user restart voxflow`. First run downloads the ggml
+model to `~/.local/share/pywhispercpp/models`. Check the GPU is actually
+used: `journalctl --user -u voxflow | grep -i vulkan`.
+
+(Alternative: a ROCm-patched CTranslate2 fork exists if you want to keep
+faster-whisper on GPU, but it requires the full ROCm stack and a source
+build — Vulkan is the low-friction path.)
+
+## Notes & troubleshooting
 - **Nothing gets typed**: check `ydotool` — `systemctl --user status
   ydotool`, and confirm you're in the `input` group (`groups`).
 - **Overlay position**: on Wayland the compositor places windows. If you
